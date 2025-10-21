@@ -54,12 +54,12 @@ def sql_query(spark, sql_path: str, output_path: str):
         query_results.show(n=5, truncate=False)  
 
         # Save results
-        printer(f"Saving Query results to: {output_path}")
+        printer(f"Saving Query results to: {output_path}", bcolors.OKGREEN)
         query_results.write.parquet(output_path, mode="overwrite")
         
         return query_results
     except Exception as e:
-        printer(f"Error executing SQL query: {e}")
+        printer(f"Error executing SQL query: {e}", bcolors.FAIL)
         return None
 
 def main(args):
