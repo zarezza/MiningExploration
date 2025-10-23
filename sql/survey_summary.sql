@@ -5,7 +5,7 @@ WITH SurveySummary AS (
         CAST(AVG(DEPTH) AS DECIMAL(10, 3)) AS Avg_Depth,
         MAX(ELEVATION) AS Max_Elevation
     FROM
-        survey_data_view
+        base_processed
     GROUP BY
         SURVEY_NAME, VERTEX
 )
