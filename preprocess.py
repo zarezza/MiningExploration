@@ -1,6 +1,5 @@
 import sys
-from pyspark.sql import SparkSession
-from pyspark.sql import functions as F
+from pyspark.sql import SparkSession, functions as F
 from pyspark.sql.window import Window
 from pyspark.sql.types import DoubleType
 from pyproj import Transformer
@@ -16,7 +15,7 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-def printer(message: str, color: str):
+def printer(message: str, color: str = None):
     if color is None:
         print(message)
     else:
@@ -32,62 +31,30 @@ def convert_coordinates_udf():
             return (None, None)
     return F.udf(transform_coords, "struct<longitude:double,latitude:double>")
 
-def sql_query(spark, sql_path: str, output_path: str):
-    sql_query_text = None
-    
-    try:
-        printer(f"Attempting to read SQL file using Spark: {sql_path}")
-        sql_content = spark.read.text(sql_path).collect()
-        sql_query_text = "\n".join([row.value for row in sql_content])
-        printer("Read SQL Successful")
-    except Exception as e:
-        printer(f"Error reading SQL file: {e}", bcolors.FAIL)
-    
-    if not sql_query_text:
-        printer("No SQL content retrieved", bcolors.FAIL)
-        return None
-    
-    # Execute the query
-    printer(f"Executing SQL query from: {sql_path}")
-    try:
-        query_results = spark.sql(sql_query_text)
-        query_results.show(n=5, truncate=False)  
-
-        # Save results
-        printer(f"Saving Query results to: {output_path}", bcolors.OKGREEN)
-        query_results.write.parquet(output_path, mode="overwrite")
-        
-        return query_results
-    except Exception as e:
-        printer(f"Error executing SQL query: {e}", bcolors.FAIL)
-        return None
-
 def main(args):
     BUCKET_NAME = args.bucket_name
-    printer(f"Bucket name: {BUCKET_NAME}", bcolors.OKBLUE)
+    METASTORE_DATABASE = "survey"
+    BASE_PROCESSED_TABLE = "base_processed"
 
     INPUT_FILE_PATH = f"gs://{BUCKET_NAME}/raw/QLD_MGA54_20210825.csv"
     printer(f"Input file path: {INPUT_FILE_PATH}", bcolors.OKBLUE)
 
-    OUTPUT_SUMMARY_PATH = f"gs://{BUCKET_NAME}/processed/survey_summary.parquet"
-    OUTPUT_DEPTH_ANOMALY_PATH = f"gs://{BUCKET_NAME}/processed/depth_anomaly.parquet"
-
-    SQL_SURVEY_SUMMARY = f"gs://{BUCKET_NAME}/sql/survey_summary.sql"
-    SQL_DEPTH_ANOMALY = f"gs://{BUCKET_NAME}/sql/depth_anomaly.sql"
-
     try:
         spark = SparkSession.builder \
             .appName("SurveyDataSparkETLJob") \
+            .enableHiveSupport() \
             .getOrCreate()
 
         spark.sparkContext.setLogLevel("ERROR")
         
         printer(f"Reading CSV from: {INPUT_FILE_PATH}")
         df_raw = spark.read.csv(INPUT_FILE_PATH, header=True, inferSchema=True)
-        printer("CSV read successfully.", bcolors.OKGREEN)
+        printer("Read CSV successful.", bcolors.OKBLUE)
     except Exception as e:
-        printer(f"ERROR: {e}", bcolors.FAIL)
+        printer(f"Error reading CSV: {e}", bcolors.FAIL)
         sys.exit(1)
+
+    spark.sql(f"CREATE DATABASE IF NOT EXISTS {METASTORE_DATABASE}")
 
     printer(f"Total raw record count: {df_raw.count()}")
     printer(f"Column names: {df_raw.columns}")
@@ -108,6 +75,7 @@ def main(args):
     
     # Remove nulls in numeric columns
     df_clean = df_clean.dropna(subset=numeric_cols)
+    printer(f"Filter nulls | Record count: {df_clean.count()}", bcolors.OKBLUE)
 
     # Cast double types
     for col in numeric_cols:
@@ -124,11 +92,11 @@ def main(args):
 
     # Filter low confidence records
     df_clean = df_clean.filter(F.col("DEPTH_CONF_WEIGHT") >= 0.5)
-    printer(f"Record count (filter low confidence): {df_clean.count()}")
+    printer(f"Filter low confidence | Record count: {df_clean.count()}", bcolors.OKBLUE)
 
     # Filter negative depths
     df_clean = df_clean.filter(F.col("DEPTH") >= 0)
-    printer(f"Record count (filter negative depths): {df_clean.count()}")
+    printer(f"Filter negative depths | Record count: {df_clean.count()}", bcolors.OKBLUE)
 
     # Add coordinate transformation and derived grid columns
     coord_transform = convert_coordinates_udf()
@@ -142,15 +110,20 @@ def main(args):
         .withColumn("grid_y", (F.col("NORTHING") / 100).cast("int"))
     )
 
-    printer(f"Total processed record after cleaning: {df_processed.count()}")
-    
-    df_processed.createOrReplaceTempView("survey_data_view")
+    printer(f"Total processed record after cleaning: {df_processed.count()}", bcolors.OKBLUE)
 
-    sql_query(spark, SQL_SURVEY_SUMMARY, OUTPUT_SUMMARY_PATH)
-    sql_query(spark, SQL_DEPTH_ANOMALY, OUTPUT_DEPTH_ANOMALY_PATH)
+    df_processed.write\
+        .mode("overwrite")\
+        .format("parquet")\
+        .saveAsTable(f"{BASE_PROCESSED_TABLE}")
 
-    printer("Spark queries completed.", bcolors.OKGREEN)
-    
+    printer(f"Processed data saved to table: {BASE_PROCESSED_TABLE}", bcolors.OKBLUE)
+    printer("Verifying saved table data...", bcolors.OKBLUE)
+
+    df_verify = spark.table(f"{BASE_PROCESSED_TABLE}")
+    df_verify.show(5)
+
+    printer("Spark process completed.", bcolors.OKGREEN)
     spark.stop()
 
 if __name__ == "__main__":
