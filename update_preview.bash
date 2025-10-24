@@ -14,7 +14,7 @@ BUCKET_NAME=$2
 gcloud dataproc jobs submit pyspark \
     --cluster=$CLUSTER_NAME \
     --region=us-central1 \
-    "gs://${BUCKET_NAME}/jobs/query.py" \
+    "gs://${BUCKET_NAME}/jobs/run_query.py" \
     -- \
     --bucket-name="$BUCKET_NAME"
 
