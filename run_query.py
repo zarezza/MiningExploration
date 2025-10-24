@@ -58,11 +58,12 @@ def main(args):
     printer(f"Source database: {METASTORE_DATABASE}", bcolors.OKBLUE)
     printer(f"Source table: {BASE_PROCESSED_TABLE}", bcolors.OKBLUE)
 
-    SQL_SURVEY_SUMMARY = f"gs://{BUCKET_NAME}/sql/survey_summary.sql"
-    SQL_DEPTH_ANOMALY = f"gs://{BUCKET_NAME}/sql/depth_anomaly.sql"
-    
-    OUTPUT_SUMMARY_PATH = f"gs://{BUCKET_NAME}/processed/survey_summary.parquet"
-    OUTPUT_DEPTH_ANOMALY_PATH = f"gs://{BUCKET_NAME}/processed/depth_anomaly.parquet"
+    queries = [
+        (f"gs://{BUCKET_NAME}/sql/survey_summary.sql", f"gs://{BUCKET_NAME}/processed/survey_summary.parquet"),
+        (f"gs://{BUCKET_NAME}/sql/depth_anomaly.sql", f"gs://{BUCKET_NAME}/processed/depth_anomaly.parquet"),
+        (f"gs://{BUCKET_NAME}/sql/boundary_depth.sql", f"gs://{BUCKET_NAME}/processed/boundary_depth.parquet"),
+        (f"gs://{BUCKET_NAME}/sql/regional_coverage.sql", f"gs://{BUCKET_NAME}/processed/regional_coverage.parquet"),
+    ]
 
     try:
         spark = SparkSession.builder \
@@ -76,11 +77,9 @@ def main(args):
         printer(f"Error initializing Spark session: {e}", bcolors.FAIL)
         sys.exit(1)
 
-    printer("Execute query 1: Survey Summary with Depth Rankings", bcolors.OKBLUE)
-    sql_query(spark, SQL_SURVEY_SUMMARY, OUTPUT_SUMMARY_PATH)
-
-    printer("Execute query 2: Depth Anomaly Analysis by Grid", bcolors.OKBLUE)
-    sql_query(spark, SQL_DEPTH_ANOMALY, OUTPUT_DEPTH_ANOMALY_PATH)
+    for sql_path, output_path in queries:
+        printer(f"Executing query from: {sql_path}", bcolors.OKBLUE)
+        sql_query(spark, sql_path, output_path)
 
     printer("Spark process completed", bcolors.OKGREEN)
     spark.stop()
