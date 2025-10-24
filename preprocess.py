@@ -36,7 +36,7 @@ def main(args):
     METASTORE_DATABASE = "survey"
     BASE_PROCESSED_TABLE = "base_processed"
 
-    INPUT_FILE_PATH = f"gs://{BUCKET_NAME}/raw/QLD_MGA54_20210825.csv"
+    INPUT_FILE_PATH = args.data
     printer(f"Input file path: {INPUT_FILE_PATH}", bcolors.OKBLUE)
 
     try:
@@ -130,6 +130,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Process survey data")
     parser.add_argument("--bucket-name", type=str, required=True, help="Bucket name")
+    parser.add_argument("--data", type=str, required=True, help="Data file path")
     args = parser.parse_args()
 
     main(args)
