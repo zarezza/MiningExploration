@@ -37,8 +37,8 @@ else
     touch temp_file
     gcloud storage cp temp_file "gs://${BUCKET_NAME}/raw/.keep"
     gcloud storage cp temp_file "gs://${BUCKET_NAME}/processed/.keep"
-    gcloud storage cp --recursive "./jobs/" "gs://${BUCKET_NAME}/jobs/"
-    gcloud storage cp --recursive "./sql/" "gs://${BUCKET_NAME}/sql/"
+    gcloud storage cp --recursive "./jobs/" "gs://${BUCKET_NAME}/"
+    gcloud storage cp --recursive "./sql/" "gs://${BUCKET_NAME}/"
     rm temp_file
 
     echo "Bucket ready"
