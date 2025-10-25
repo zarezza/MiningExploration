@@ -40,5 +40,5 @@ Then surveyor can view the result by copying the notebook file (minex_view.ipynb
 
 This removes all table from metastore
 ```shell
-gcloud dataproc jobs submit pyspark --cluster=minex-spark-cluster --region="us-central1" gs://<bucket_name>/jobs/drop_all.py
+gcloud dataproc jobs submit pyspark --cluster=<cluster_name> --region="<region>" gs://<bucket_name>/jobs/drop_all.py
 ```
